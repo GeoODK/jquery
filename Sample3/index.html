@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+		
+		<title>index</title>
+		<meta name="description" content="Lab3">
+		<meta name="author" content="Jon Nordling">
+
+		<meta name="viewport" content="width=device-width" initial-scale="1.0">
+
+		<link rel="stylesheet" href="http://code.jquery.com/mobile/1.3.2/jquery.mobile-1.3.2.min.css" />
+		<link rel="stylesheet" href="http://js.arcgis.com/3.6/js/esri/css/esri.css">
+		<link rel="stylesheet" href="css/mystyles.css">
+		
+		<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+		<script>
+			$(document).on("mobileinit", function(){
+				//change global settings using $.mobile object
+				$.mobile.defaultPageTransition ="fade";
+				$.mobile.page.prototype.options.headerTheme="b";
+				$.mobile.page.prototype.options.footerTheme="b";
+				$.mobile.pageLoadErrorMessage ="Whoops! Page Load Error!";
+				
+			});
+			
+		</script>
+		
+		
+		<script src="http://code.jquery.com/mobile/1.3.2/jquery.mobile-1.3.2.min.js"></script>
+		<script src="http://js.arcgis.com/3.6compact/"></script>
+		
+		<script >
+			dojo.require("esri.tasks.locator");
+			
+			var locator;
+			var searchLocation, currentLocation;
+		
+			function init(){
+				
+				//locator= new esri.tasks.locator("http://sampleserver1.arcgisonline.com/ArcGIS/rest/services/Locators/ESRI_Geocode_USA/GeocodeServer");
+				if(navigator.geolocation){
+					navigator.geolocation.watchPosition(showLocation, locationError);
+				}
+				else{
+					alert("Geolocation not supported in this device");
+					return;
+				}
+				/* 
+				The queryYahoo function will not work due the the api expireing
+
+				*/
+				$("#policeItem").on("click", function(){
+					queryYahoo('police');					
+				});
+				
+				$("#fsItem").on("click", function(){
+					queryYahoo('Fire Station');					
+				});
+				
+				$("#tdItem").on("click", function(){
+					queryYahoo('Transportation Department');					
+				});
+				
+				$("#ahItem").on("click", function(){
+					queryYahoo('Animal Hospital');					
+				});
+				
+				$("#hospitalItem").on("click", function(){
+					queryYahoo('Hospital');					
+				});
+			}
+			
+			function showLocation(location){
+		        var pt = new esri.geometry.Point(location.coords.longitude, location.coords.latitude, new esri.SpatialReference({
+		          wkid : 4326
+		        }));
+		        
+		        currentLocation = pt;
+		  
+	 	    	var coord = "Latitude : "+ pt.y + " Logitude : " + pt.x +"<br />";
+	 	    	 	  
+		        if(!locator){	
+		        	locator = new esri.tasks.Locator("http://sampleserver1.arcgisonline.com/ArcGIS/rest/services/Locators/ESRI_Geocode_USA/GeocodeServer");
+				}
+		        locator.locationToAddress(pt, 100, function(candidate) {
+		        	
+					if(candidate.address) {
+						
+						var address ="Address: "+ candidate.address.Address + "<br/> " + candidate.address.City + ", " + candidate.address.State + " " + candidate.address.Zip;
+						
+						$('#loc').html(address);
+							
+						var info = "Location accurate within " + location.coords.accuracy + " meters <br /> Last Updated: " + new Date(location.timestamp).toLocaleString();
+						
+						coord += "Address Latitude : "+ candidate.location.y + " Logitude : " + candidate.location.x +"<br />";	
+						$('#acc').html(coord+info);
+						
+			    			
+				    }
+		        }, function(error) {
+		        	$('#loc').html('Unable to determine address');
+		        });
+	      	}
+	      	
+	      	function locationError(error) {
+		        switch (error.code) {
+		          case error.PERMISSION_DENIED:
+		            alert("Geolocation access denied or disabled. To enable geolocation on your iPhone, go to Settings > General > Location Services");
+		            break;
+		
+		          case error.POSITION_UNAVAILABLE:
+		            alert("Current location not available");
+		            break;
+		
+		          case error.TIMEOUT:
+		            alert("Timeout");
+		            break;
+		
+		          default:
+		            alert("unknown error");
+		            break;
+		        }
+			}
+		
+	      	function queryYahoo(queryVal) {
+	      
+	      		var dist = $("#distVal").text().split(" ");  	
+	        	searchLocation = currentLocation;
+		      
+		        var queryParams = {
+		        	query : queryVal,
+		          	latitude : searchLocation.y,
+		          	longitude : searchLocation.x,
+			        radius : dist[0],
+			        results : 10,
+			        output : "json",
+			        appid :"PKh4lRnV34HZaNsQ4f6ntKFttEicBxELqacg0QW.Clm6Ck5JQzX6FoBkQLy5L6dseAP1"
+		        };
+	
+		        esri.request({
+					url : "http://local.yahooapis.com/LocalSearchService/V3/localSearch",
+					content : queryParams,
+					handleAs : "json",
+					callbackParamName : "callback",
+					load : buildYahooLocalLocations,
+					error : esri.config.defaults.io.errorHandler
+		        });
+	                
+		    } //end of queryYahoo
+ 
+	        function buildYahooLocalLocations(response) {
+	        	$("#searchResults li").remove();
+	        	
+	        	if(response.ResultSet.totalResultsReturned == 0) {
+	        		
+	        		var noResults = $("<li>").html("No results found within search radius. Use the settings option to increase the search distance.");
+	        		
+	        		$("#searchResults").append(noResults);
+	        		return;
+	        	}
+	        		
+        		results = [];
+        		
+        		if(response.ResultSet.totalResultsReturned == 1) {
+        			results.push(response.ResultSet.Result);
+        		} else {
+        			results = response.ResultSet.Result;
+        		}
+				
+				for(var i=0; i<results.length; i++){
+					
+					var content;    
+					
+					if(results[i].BusinessClickUrl) {
+						content = "<a target='_blank' href='" + results[i].BusinessClickUrl + "'> <b>" + results[i].Title + "</b></a>";
+					}else{
+						content = "<a target='_blank' href=''> <b>" + results[i].Title + "</b><br />";
+					}
+					content = content + results[i].Address + "</br>";
+					content = content + results[i].Phone + "<br />";
+					  
+					if(!isNaN(results[i].Rating.AverageRating)) {
+						content = content + "Average Rating: " + results[i].Rating.AverageRating + "<br />";
+					} else {
+						content = content + "Average Rating: No Reviews <br/>";
+					}
+					content = content+ results[i].Distance + " miles<br/> </a>";  
+					content = content + "<a href='#mapView' onclick='locationDetails(" + i + ")' > Route </a>";                              
+					var resultItem = $("<li>").html(content);
+					$("#searchResults").append(resultItem);
+				}
+				
+				$("#searchResults").listview("refresh"); 	
+	        }
+
+			function updateDist(value){
+				$("#distVal").html(""+value+" miles")
+			}
+			
+			
+			
+			$(document).on("pageinit", init);
+
+			
+			
+		</script>
+		
+	</head>
+
+	<body>
+		<div data-role="page" id="homeView" data-tile="Wildlife Vehicle Collisions" data-theme="d">
+			<div data-role="header" data-position="fixed" id="header1">
+				<h1>WVC Management</h1>
+			</div>
+			<div data-role="content">
+				<img src="images/wildlife-3.jpg" alt="View Source Logo" />
+				<div data-role="controlgroup">
+					<a href="#findView" data-role="button" data-icon="search" data-theme="b">Find Nearby</a>
+					<a href="#report" data-role="button" data-icon="grid" data-theme="b">Report Vehicle Collisions</a>
+					<a href="#videos" data-role="button" data-icon="star" data-theme="b">Videos</a>
+					<a href="#photos" data-role="button" data-icon="plus" data-theme="b">Photos</a>
+				</div>
+			</div>
+		</div> 
+	
+	<div data-role="page" id="findView">
+		<div data-role="header" data-position="fixed" id="header1">
+			<a href="#homeView" data-icon="home" data-iconpos="notext">Home</a>
+			<h1>What's Nearby</h1>
+		</div>
+		<div data-role="content">
+			<ul data-role="listview" data-inset="true">
+				<li id="policeItem"><a href="#resultsView">Police Departments</a></li>
+				<li id="fsItem"><a href="#resultsView">Fire Stations</a></li>
+				<li id="tdItem"><a href="#resultsView">Transportation Departments</a></li>
+				<li id="ahItem"><a href="#resultsView">Animal Hospitals</a></li>
+				<li id="hospitalItem"><a href="#resultsView">Hospitals</a></li>
+				<li id="settingItem"><a href="#settingsView">Settings</a></li>
+			</ul>		
+			<h2>Current Location</h2>
+			<div id="loc"></div>
+			<div id="acc"></div>		
+		</div>
+		<div data-role="footer" data-position="fixed" id="footer1">
+			<div data-role="navbar">
+				<ul>
+					<li><a href="#homeView" data-role="button" data-icon="home">Home</a></li>
+					<li><a href="#findView" data-role="button" data-icon="search">Find</a></li>
+					<li><a href="#report" data-role="button" data-icon="grid">Report</a></li>
+			        <li><a href="#videos" data-role="button" data-icon="star">Videos</a> </li>    
+					<li><a href="#photos" data-role="button" data-icon="plus">Photos</a> </li>			
+				</ul>
+			</div>
+		</div>		
+		
+	</div>
+	<div data-role="page" id="resultsView">
+		<div data-role="header" data-position="fixed" id="header1">
+    		<a href="#findView">Find</a>
+    		<h1>Results</h1>
+		</div>
+		<div data-role="content">	
+			<ul id="searchResults" data-inset="true" data-role="listview">
+				
+			</ul>
+		</div>
+	</div>	
+	
+	<div data-role="page" id="mapView">
+		<div data-role="header" data-position="fixed" id="header1">
+			<a href="#resultView" >Results</a>
+			<h1>Map View</h1>
+			<a href="#directionsView"> Direction</a>
+		</div>
+		<div data-role="content" id="mapDiv" style="width:100%;height:100%;">		
+	
+		</div>
+	
+	</div>
+	
+	<div data-role="page" id="directionsView">
+		<div data-role="header" data-position="fixed" id="header1">
+			<a href="#mapView" >Map</a>
+			<h1>Directions</h1>
+		</div>
+		<div data-role="content">		
+			<div id="directions"></div>
+		</div>
+	
+	</div>
+	
+	<div data-role="page" id="settingsView">
+		<div data-role="header" data-position="fixed" id="header1">
+			<a href="#findView" >Find</a>
+			<h1>Settings</h1>
+		</div>
+		<div data-role="content">		
+			<ul data-role="listview" data-inset="true">
+				<li><a href="#distView">Search Distance <span id="distVal" class="ui-li-aside">2 Miles</span></a></li>
+			</ul>
+		</div>
+	
+	</div>	
+
+	<div data-role="page" id="distView">
+		<div data-role="header" data-position="fixed" id="header1">
+			<a href="#settingsView" >Settings</a>
+			<h1>Search Distance</h1>
+		</div>
+		<div data-role="content">		
+			<ul data-role="listview" data-inset="true">
+				<li onclick="updateDist(2)"><a href="#settingsView">2 miles</a></li>
+				<li onclick="updateDist(3)"><a href="#settingsView">3 miles</a></li>
+				<li onclick="updateDist(5)"><a href="#settingsView">5 miles</a></li>
+				<li onclick="updateDist(7)"><a href="#settingsView">7 miles</a></li>
+				<li onclick="updateDist(10)"><a href="#settingsView">10 miles</a></li>
+			</ul>
+		</div>
+	
+	</div>	
+		
+	</body>
+</html>
